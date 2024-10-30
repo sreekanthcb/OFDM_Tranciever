@@ -1,5 +1,5 @@
 function nRB = n_RBCalc(scs,bw)
-
+    % based on release 16 of 5GNR
     scs     = scs/1e3;
     bw      = bw/1e6;
 
