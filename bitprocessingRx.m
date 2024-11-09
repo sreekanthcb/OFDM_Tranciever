@@ -17,6 +17,6 @@ elseif cr == 5/6
 end
 
 deintData       = RowCol_DeInterleaver(inpt,interleaveLength);
-vitOut          = vitdec(deintData,tr,64,'term','hard',puncPat);
+vitOut          = vitdec(deintData,tr,64,'term','hard',puncPat); % hard decoding
 out             = descrambler(vitOut(1:end-viterbiTailBits),scramblerInitialState);
 end
