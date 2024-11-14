@@ -6,21 +6,21 @@ scs                 = 15e3;
 bw                  = 40e6;
 n_symbols           = 14;
 preambleSymbolIdx   = 1;
-dmrsSymbolIdx       = [3 6 9];
-dmrsFreqGap         = 2;
+dmrsSymbolIdx       = [2 6 9 14]; % dmrs symbol position
+dmrsFreqGap         = 6; % gap between dmrs in an RB
 
 %% Modulation Parameters
-mod_order       = 16;
+mod_order       = 4;
 
 %% BB parameters
 upSamplingFactor    = 2;
 
 %% OFDM Parameters
-cpSize              = 1/32;
+cpSize              = 1/16;
 
 %% FEC parameters
 FEC.cr                      = 1/2;
-FEC.viterbiTailBits         = 16;
+FEC.viterbiTailBits         = 32;
 FEC.scramblerInitialState   = 'CEA63';
 
 %% RF parameters
@@ -30,9 +30,9 @@ Fc                          = 996e6;
 disableAllErrors          = 0; % if '1' no channel impairments
 
 ChanParams.timingOffsetEn = true;
-ChanParams.awgnNoiseEn    = true;
+ChanParams.awgnNoiseEn    = false;
 ChanParams.PhaseErrEn     = false;
-ChanParams.CFOEn          = true;
+ChanParams.CFOEn          = false;
 
 %% Derived Parameters (Dont Edit anything from here onwards casually)
 n_RBs               = n_RBCalc(scs,bw);
@@ -205,16 +205,13 @@ gridRx            = ShiftedFrame(nZerosUpperSide+1:end-nZerosDownSide,:);
 rxData            = gridRx(dataIndices);
 rxDmrsData        = gridRx(dmrsIndices);
 
-rxDmrsData        = reshape(rxDmrsData,[],numel(dmrsSymbolIdx));
-refDmrsData       = reshape(dmrsData,[],numel(dmrsSymbolIdx));
-
-[freqErrVec, PhaseErrVec]  = freqErrEstimation(rxDmrsData,refDmrsData,dmrsSymbolIdx,scs);
-freqErr                    = mean(freqErrVec);
-phaseErr                   = mean(PhaseErrVec);
-
+%% Channel estimation and Equalization
+chanEst           = rxDmrsData./dmrsData; % channel estimation
+splineEst         = interp1(dmrsIndices,chanEst,gridIndices,'spline'); % interpolation of estimation
+eqRxData          = rxData./splineEst(dataIndices); % Equalization
 
 %% Demodulation
-demodX            = qamdemod(rxData,mod_order);
+demodX            = qamdemod(eqRxData,mod_order);
 demodBits         = de2bi(demodX);
 demodBits         = demodBits(:)';
 %% Bit processing
