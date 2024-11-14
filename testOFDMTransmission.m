@@ -1,16 +1,16 @@
 %% Inputs
-figs_en             = 1;
+figs_en             = 0;
 
 %% Resource Grid parameters
 scs                 = 15e3;
 bw                  = 40e6;
 n_symbols           = 14;
 preambleSymbolIdx   = 1;
-dmrsSymbolIdx       = [3 5 8 13];
+dmrsSymbolIdx       = [3 6 9];
 dmrsFreqGap         = 2;
 
 %% Modulation Parameters
-nSampMSK            = 4;
+mod_order       = 16;
 
 %% BB parameters
 upSamplingFactor    = 2;
@@ -39,6 +39,8 @@ n_RBs               = n_RBCalc(scs,bw);
 nFFT                = n_FFTCalc(n_RBs);
 bb_Fs               = nFFT*scs;
 
+bitsperConstPoint   = log2(mod_order);
+
 if Fc < 2*bb_Fs*upSamplingFactor
     error('RF Sampling Rate is insufficient, Atleast required is %0.2f MHz\n',(2*bb_Fs*upSamplingFactor)/1e6);
 end
@@ -52,20 +54,30 @@ end
 
 %% Bit processing
 n_dataPos               = n_RBs*12*n_symbols - (numel(preambleSymbolIdx)*n_RBs*12 + numel(dmrsSymbolIdx)*n_RBs*12/dmrsFreqGap);
-n_dataBits              = n_dataPos*nSampMSK;
+n_dataBits              = n_dataPos*bitsperConstPoint;
 n_origBits              = n_dataBits*FEC.cr-FEC.viterbiTailBits;
 origBits                = round(rand(1,n_origBits));
 FEC.interleaveLength    = max(factor(n_dataBits));
 bitProcessedData        = bitprocessingTx(origBits,FEC);
 
 %% Modulation
-modData             = mskmod(bitProcessedData,nSampMSK);
+bitProcessedData_1  = reshape(bitProcessedData,numel(bitProcessedData)/bitsperConstPoint,bitsperConstPoint);
+X                   = bi2de(bitProcessedData_1)';
+modData             = qammod(X,mod_order)/bitsperConstPoint;
 
 preambleLength      = n_RBs*12;
-preambleData        = mskmod(round(rand(1,preambleLength*nSampMSK)),nSampMSK);
+n_preambleBits      = preambleLength*2;
+preambleBits        = round(rand(1,n_preambleBits));
+preambleBits_1      = reshape(preambleBits,numel(preambleBits)/2,2);
+X                   = bi2de(preambleBits_1)';
+preambleData        = qammod(X,4)/2; % Preamble is QPSK modulated
 
 dmrsLength          = numel(dmrsSymbolIdx)*n_RBs*12/dmrsFreqGap;
-dmrsData            = mskmod(round(rand(1,dmrsLength/nSampMSK)),nSampMSK);
+n_dmrsBits          = dmrsLength*2;
+dmrsBits            = round(rand(1,n_dmrsBits));
+dmrsBits_1          = reshape(dmrsBits,numel(dmrsBits)/2,2);
+X                   = bi2de(dmrsBits_1)';
+dmrsData            = qammod(X,4)/2; % Preamble is QPSK modulated
 
 %% Grid construction
 gridBoundaries      = [1:n_RBs*12:n_RBs*12*n_symbols;n_RBs*12:n_RBs*12:n_RBs*12*n_symbols];
@@ -104,9 +116,7 @@ nColsInGrid                 = size(refGrid,2);
 nZerosUpperSide             = (nFFT - nRowsInGrid)/2;
 nZerosDownSide              = (nFFT - nRowsInGrid)/2;
 
-ZP_Frame                    = [zeros(nZerosUpperSide,nColsInGrid);
-    refGrid;
-    zeros(nZerosDownSide,nColsInGrid)];
+ZP_Frame                    = [zeros(nZerosUpperSide,nColsInGrid);refGrid;zeros(nZerosDownSide,nColsInGrid)];
 % IFFT Shift
 ShiftedFrame      = ifftshift(ZP_Frame,1);
 
@@ -126,14 +136,14 @@ end
 finalTDFrame        = tdFramewithCP(:).';
 
 %% Upsampling
-tdFrameOut          = resample(finalTDFrame,upSamplingFactor,1); % upconversion from 2x to 8x
+tdFrameOut          = resample(finalTDFrame,upSamplingFactor,1); % upconversion
 if figs_en
     figure()
     subplot 221
     plot(real(finalTDFrame));
     title('Time domain Baseband output ');
     subplot 222
-    spectrumVisualizer(finalTDFrame,bb_Fs*nSampMSK)
+    spectrumVisualizer(finalTDFrame,bb_Fs/mod_order)
 
     subplot 223
     plot(real(tdFrameOut));
@@ -194,8 +204,8 @@ gridRx            = ShiftedFrame(nZerosUpperSide+1:end-nZerosDownSide,:);
 %% Extracting Data and Ref Signals from Grid
 rxData            = gridRx(dataIndices);
 rxDmrsData        = gridRx(dmrsIndices);
-rxDmrsData        = reshape(rxDmrsData,[],numel(dmrsSymbolIdx));
 
+rxDmrsData        = reshape(rxDmrsData,[],numel(dmrsSymbolIdx));
 refDmrsData       = reshape(dmrsData,[],numel(dmrsSymbolIdx));
 
 [freqErrVec, PhaseErrVec]  = freqErrEstimation(rxDmrsData,refDmrsData,dmrsSymbolIdx,scs);
@@ -204,8 +214,9 @@ phaseErr                   = mean(PhaseErrVec);
 
 
 %% Demodulation
-demodBits         = mskdemod(rxData,nSampMSK);
-
+demodX            = qamdemod(rxData,mod_order);
+demodBits         = de2bi(demodX);
+demodBits         = demodBits(:)';
 %% Bit processing
 decBits           = bitprocessingRx(demodBits,FEC);
 
