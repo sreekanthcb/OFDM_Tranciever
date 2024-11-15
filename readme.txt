@@ -12,4 +12,4 @@ succesfully decodes transmitted bits and BER = 0 is achived
 To-Do
     1) make more robust to channel conditions
 
-contact email: yahoo.com, preceded by @ sign, preceded by sreekanthcb
+contact email: sreekanthcb@yahoo.com
