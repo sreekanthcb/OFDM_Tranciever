@@ -1,5 +1,5 @@
 function nRB = n_RBCalc(scs,bw)
-    % based on release 16 of 5GNR
+    % based on release 16 of 3GPP 5GNR standards
     scs     = scs/1e3;
     bw      = bw/1e6;
 
